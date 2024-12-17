@@ -1,0 +1,6 @@
+{
+    "firstName": ["first_name"],
+    "lastName": ["last_name"],
+    "email": ["email"],
+    "phone": ["phone"]
+}
