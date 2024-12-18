@@ -2,5 +2,6 @@
     "firstName": ["First Name"],
     "lastName": ["Last Name"],
     "email": ["Email"],
-    "phone": ["Phone", "Phone Number"]
+    "phone": ["Phone", "Phone Number"],
+    "city": ["City"]
 }

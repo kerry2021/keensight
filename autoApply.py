@@ -1,6 +1,5 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 #from gpt4all import GPT4All
 from bs4 import BeautifulSoup
 import time
@@ -25,8 +24,7 @@ def extract_input_tags(page_source: str):
             'for': label_tag.get('for', 'N/A'),
             'text': label_tag.get_text(strip=True),
         }
-        #clean * postfix from label text
-        print(label_info['for'])
+        #clean * postfix from label text        
         if len(label_info['text']) > 0 and label_info['text'][-1] == '*':
             label_info['text'] = label_info['text'][:-1]
         label_fields.append(label_info)
@@ -103,9 +101,10 @@ while True:
                 ele.send_keys(personalInfo[field])
                 break
 
-    while not driver.execute_script("return window.clicked;") and driver.current_url == old_url:
-            
-        time.sleep(0.1)
+    while not driver.execute_script("return window.clicked;") and driver.current_url == old_url:            
+        if inputTags == []:
+            break
+        time.sleep(0.1)          
     print("Clicked!")
 
 input("Press Enter to quit the browser...")

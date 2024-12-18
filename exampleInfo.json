@@ -2,5 +2,6 @@
     "firstName": "John",
     "lastName": "Doe",
     "email": "jd@gmail.com",
-    "phone": "1234567890"
+    "phone": "1234567890",
+    "city": "Toronto"
 }
