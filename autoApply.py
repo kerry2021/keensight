@@ -4,17 +4,27 @@ from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 import time
 import json
+import re
 
 def safe_find_element(driver, by, value):
     try:
         return driver.find_element(by, value)
     except:
         return None  # Return None if the element is not found
+
+def find_by_elementIndex_and_send(driver, idLst, idIndex, text):
+    if idIndex < len(idLst):    
+        print("Sending: " + text + " to " + idLst[idIndex])        
+        ele = safe_find_element(driver, By.ID, idLst[idIndex])       
+        if ele != None and ele.get_attribute("value") == "":
+            ele.send_keys(text)
+            
     
+
 # Extract input tags from the HTML
 def extract_input_tags(page_source: str):
     soup = BeautifulSoup(page_source, 'html.parser')
-    input_tags = soup.find_all('input')
+    input_tags = soup.find_all('input') + soup.find_all('textarea')
     label_tags = soup.find_all('label')
 
     label_fields = []
@@ -27,6 +37,8 @@ def extract_input_tags(page_source: str):
         #clean * postfix from label text        
         if len(label_info['text']) > 0 and label_info['text'][-1] == '*':
             label_info['text'] = label_info['text'][:-1]
+        if len(label_info['text']) > 0 and label_info['text'][0] == '*':
+            label_info['text'] = label_info['text'][1:]
         label_fields.append(label_info)
 
     # Collecting the input tags and their relevant attributes
@@ -48,6 +60,15 @@ def extract_input_tags(page_source: str):
 
     return input_fields
 
+def find_id_with_possible_label(inputTags, possibleLabels):
+    matches = []
+    for tag in inputTags:
+        for label in possibleLabels:            
+            if re.match(label, tag['label'], re.IGNORECASE):
+                print("Matched: " + label + " and " + tag['label'])
+                matches.append(tag['id'])
+                break
+    return matches
 
 # Initialize the browser
 driver = webdriver.Chrome()
@@ -60,8 +81,7 @@ with open('exampleInfo.json', 'r') as file:
     personalInfo = json.load(file)
 
  # Open the job application page
-driver.get("https://clio.wd3.myworkdayjobs.com/en-US/ClioCareerSite/job/Vancouver/Software-Developer_REQ-1532?source=Linkedin")
-
+driver.get("https://rakuten.wd1.myworkdayjobs.com/RakutenRewards/job/Toronto-Canada/Software-Engineer--iOS-_1023319?source=LinkedIn")
 while True:
     old_url = driver.current_url
     driver.execute_script("""
@@ -88,24 +108,29 @@ while True:
 
     # Fill in fields
     for field in personalInfo:
-        possibleLabels = tagtoLabel[field]
-        for label in possibleLabels:
-            #find the id of the label
-            ID = 'N/A'
-            for tag in inputTags:                
-                if tag['label'] == label:
-                    ID = tag['id']
-                    break
-            ele = safe_find_element(driver, By.ID, ID)
-            if ele != None and id != 'N/A' and ele.get_attribute("value") == "":                
-                ele.send_keys(personalInfo[field])
-                break
+        if field != "experience":
+            possibleLabels = tagtoLabel[field]
+            IDs = find_id_with_possible_label(inputTags, possibleLabels)
+            print(IDs)
+            find_by_elementIndex_and_send(driver, IDs, 0, personalInfo[field])
+    
+    # Fill in experience
+    experienceIndex = 0
+    experience = personalInfo["experience"]
+    for job in experience:
+        for fieldName in job:
+            fieldIds = find_id_with_possible_label(inputTags, tagtoLabel[fieldName])        
+            if experienceIndex < len(fieldIds):
+                print("Experience field: " + fieldName + " with IDs: " + str(fieldIds))
+                find_by_elementIndex_and_send(driver, fieldIds, experienceIndex, job[fieldName])
+
+        experienceIndex += 1
+
+
 
     while not driver.execute_script("return window.clicked;") and driver.current_url == old_url:            
-        if inputTags == []:
-            break
+        #if inputTags == []:
+            #break
         time.sleep(0.1)          
     print("Clicked!")
 
-input("Press Enter to quit the browser...")
-driver.quit()

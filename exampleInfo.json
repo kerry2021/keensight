@@ -1,7 +1,21 @@
 {
     "firstName": "John",
-    "lastName": "Doe",
-    "email": "jd@gmail.com",
-    "phone": "1234567890",
-    "city": "Toronto"
+    "lastName": "Smith",
+    "email": "TotallyJohn@gmail.com",
+    "phone": "123456789",
+    "city": "Toronto",
+    "experience":       
+    [
+        {
+            "jobTitle": "Software Developer",
+            "company": "IBM",
+            "roleDescription": "-Developed a web application for a client using AngularJS, NodeJS, and MongoDB\n -Implemented a RESTful API to communicate between the front-end and back-end\n -Created a user-friendly interface for the client to manage their data"
+        },
+        {
+            "jobTitle": "Software Developer",
+            "company": "Google",
+            "roleDescription": "-Developed a web application for a client using AngularJS, NodeJS, and MongoDB\n -Implemented a RESTful API to communicate between the front-end and back-end\n -Created a user-friendly interface for the client to manage their data"
+        }
+    ]       
+    
 }
