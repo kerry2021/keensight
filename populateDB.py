@@ -17,9 +17,6 @@ jobs = scrape_jobs(
     results_wanted=20,
     hours_old=24,
     country_indeed='USA',
-    
-    # linkedin_fetch_description=True # gets more info such as description, direct job url (slower)
-    # proxies=["208.195.175.46:65095", "208.195.175.45:65095", "localhost"],
 )
 
 
@@ -41,25 +38,37 @@ for _, row in df.iterrows():
     print(row['date_posted'])  
     for key in row.keys():
         row[key] = nan_to_none(row[key])  
+    #check if job with same title, company and url already exists
     cursor.execute(
         """
-        INSERT INTO job_postings (title, company, location, job_type, salary_min, salary_max, job_url, description, date, salary_interval, company_logo_url, company_url)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        SELECT * FROM job_postings WHERE title = %s AND company = %s AND job_url = %s
         """,
-        (
-            row["title"],
-            row["company"],
-            row["location"],
-            row["job_type"],
-            row["min_amount"],
-            row["max_amount"],
-            row["job_url"],
-            row["description"],
-            row["date_posted"],
-            row["interval"],
-            row["company_logo"],
-            row["company_url"]
-        )
+        (row["title"], row["company"], row["job_url"])
+    )
+    
+    #print a message if the job already exists
+    if cursor.fetchone():
+        print(f"Job {row['title']} at {row['company']} already exists in the database")
+    else:
+        cursor.execute(
+            """
+            INSERT INTO job_postings (title, company, location, job_type, salary_min, salary_max, job_url, description, date, salary_interval, company_logo_url, company_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                row["title"],
+                row["company"],
+                row["location"],
+                row["job_type"],
+                row["min_amount"],
+                row["max_amount"],
+                row["job_url"],
+                row["description"],
+                row["date_posted"],
+                row["interval"],
+                row["company_logo"],
+                row["company_url"]
+            )
     )
 
 conn.commit()
