@@ -6,6 +6,8 @@ import os
 from openai import OpenAI
 import json
 
+IMPORTANCE_TO_WEIGHT = {"explicitly required":1, "inferred required":0.9, "transferable to Required skills":0.8, "good to have":0.5, "maybe helpful":0.2, "irrelevent":0}
+
 def nan_to_none(value):
     if pd.isna(value):
         return None
@@ -13,12 +15,13 @@ def nan_to_none(value):
 
 def initialize_llm(model, client):
     prompt = """
-    I want you to help me evaluate the experience requirements for specific skills based on the job description, you should follow these guidelines:
+    I want you to help me evaluate the experience requirements and relevance to the posting for specific skills based on the job description, you should follow these guidelines:
     1.Identify Required Skills: Carefully review the job description and list related skills mentioned.
     2.Determine Minimum Requirements: For each skill identified, check if there is an explicitly stated minimum number of years of experience required. Note this information accurately.
     3.Assign Equivalent Experience:
         -If a specific minimum requirement is given (e.g., 3 years of SQL experience), use that figure to estimate the equivalent experience.
         -If no explicit minimum is provided, check if any other skills are a subskill of the current skill, and consider how it might contribute to the skill mentioned. When none is relevant, set the equivalent experience to 0
+    4.Consider how relevent this skill is to the posting overall, I will ask later.
     """
     print("Prompt: " + prompt)
     response = client.chat.completions.create(
@@ -44,8 +47,8 @@ def update_job_description(model, client, job_description):
     )    
     return
 
-def extract_experience_from_llm(model, client, skillname):
-    prompt = "What is the equivalence experience required for " + skillname + " :\n"
+def extract_skill_details(model, client, skillname):
+    prompt = "What is the equivalence experience required for " + skillname + ", and how important is it to the job:\n"
     print("Prompt: " + prompt)
     response = client.chat.completions.create(
         model=model,
@@ -61,23 +64,30 @@ def extract_experience_from_llm(model, client, skillname):
                 "type": "object",
                 "properties": {
                     "years_of_experience_required": {
-                    "type": "integer"
+                        "type": "integer"
+                    },
+                    "importance":{
+                        "type": "string",
+                        "enum": ["explicitly required", "inferred required", "transferable to Required skills", "good to have", "maybe helpful", "irrelevent"],
+                        "description": "The importance level of the skill"
                     }
                 },
-                "required": ["years_of_experience_required"]
+                "required": ["years_of_experience_required", "importance"]
                 }
             }
         },
         max_tokens=800
     )
-    answer = response.choices[0].message.content
-    print("Response: " + answer)
-    return answer
+    answer = json.loads(response.choices[0].message.content)
+    print("Response:")
+    print(answer)
+    return (answer["years_of_experience_required"], IMPORTANCE_TO_WEIGHT[answer["importance"]])   
+    
 
 #Recursively use LLM to evaluate skills needed and enter them into the database
 #Assumes that the LLM was already given the job description
 #Check skilltree_impl.docx for details
-def fill_skills_with_llm(cursor, skill_id, job_id, skill_weight, model, client):
+def fill_skills_with_llm(cursor, skill_id, job_id, model, client):
     #find the name of the skill
     cursor.execute(
         """
@@ -86,18 +96,7 @@ def fill_skills_with_llm(cursor, skill_id, job_id, skill_weight, model, client):
         (skill_id,)
     )
     skill_name = cursor.fetchone()[0]
-
-    #find ids and names of children of the skill
-    cursor.execute(
-        """
-        SELECT id, name FROM skilltree_hierachy WHERE parent_id = %s
-        """,
-        (skill_id,)
-    )
-    children = cursor.fetchall()
-
-    skill_experience_level = json.loads(extract_experience_from_llm(MODEL, client, skill_name))["years_of_experience_required"]
-    print(type(skill_experience_level))
+    skill_experience_level, weight = extract_skill_details(model, client, skill_name)    
 
     #insert the skill into the database
     cursor.execute(
@@ -105,8 +104,20 @@ def fill_skills_with_llm(cursor, skill_id, job_id, skill_weight, model, client):
         INSERT INTO posting_skills (job_id, skill_id, level_required, weight)
         VALUES (%s, %s, %s, %s)
         """,
-        (job_id, skill_id, skill_experience_level, skill_weight)
+        (job_id, skill_id, skill_experience_level, weight)
     )     
+
+    #find ids and names of children of the skill
+    cursor.execute(
+        """
+        SELECT id FROM skilltree_hierachy WHERE parent_id = %s
+        """,
+        (skill_id,)
+    )
+    children = cursor.fetchall()
+    for child in children:
+        print("repeating with skillID: " + str(child[0]))
+        fill_skills_with_llm(cursor, child[0], job_id, model, client)
 
 
 jobs = scrape_jobs(
@@ -133,7 +144,7 @@ conn = psycopg2.connect(
 
 cursor = conn.cursor()
 client = OpenAI(base_url="http://127.0.0.1:1234/v1", api_key="lm-studio")
-MODEL = "deepseek-r1-distill-qwen-32b"
+MODEL = "mistral-small-24b-instruct-2501"
 initialize_llm(MODEL, client)
 
 for _, row in df.iterrows():
@@ -175,7 +186,7 @@ for _, row in df.iterrows():
         conn.commit()
         job_id = cursor.fetchone()[0]
         update_job_description(MODEL, client, row["description"])
-        fill_skills_with_llm(cursor, 1, job_id, 1, MODEL, client)
+        fill_skills_with_llm(cursor, 1, job_id, MODEL, client)
 
 conn.commit()
 cursor.close()
